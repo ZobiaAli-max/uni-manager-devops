@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>University Management System</title>
+<style>
+body{font-family:system-ui,Arial,sans-serif;margin:0;background:#f4f6fa;color:#222}
+header{background:#1f3a68;color:#fff;padding:16px 24px}
+header h1{margin:0;font-size:22px} header small{opacity:.8}
+nav{display:flex;gap:8px;padding:12px 24px;background:#fff;border-bottom:1px solid #dde}
+nav button{padding:8px 16px;border:0;border-radius:6px;background:#e6ebf5;cursor:pointer;font-size:14px}
+nav button.active{background:#1f3a68;color:#fff}
+main{padding:20px 24px;max-width:1000px;margin:auto}
+#stats{display:flex;gap:12px;margin-bottom:16px}
+.stat{background:#fff;padding:12px 18px;border-radius:8px;box-shadow:0 1px 3px #0001}
+form{display:flex;flex-wrap:wrap;gap:8px;background:#fff;padding:14px;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 3px #0001}
+input{padding:8px;border:1px solid #ccd;border-radius:6px;flex:1;min-width:140px}
+.btn{padding:8px 16px;border:0;border-radius:6px;background:#2e7d32;color:#fff;cursor:pointer}
+.btn.red{background:#c62828}.btn.blue{background:#1565c0}.btn.grey{background:#777}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px #0001}
+th,td{padding:10px;text-align:left;border-bottom:1px solid #eef}
+th{background:#eef2fa} #msg{margin:8px 0;min-height:20px;font-weight:600}
+.ok{color:#2e7d32}.err{color:#c62828}
+</style></head><body>
+<header><h1>University Management System</h1><small>DevOps for Cloud Computing - Assignment 1</small></header>
+<nav id="nav"></nav>
+<main>
+<div id="stats"></div>
+<form id="form"></form>
+<div id="msg"></div>
+<table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+</main>
+<script>
+const cfg={
+ students:{label:'Students',fields:[['name','Name'],['email','Email'],['department','Department'],['semester','Semester','number']],cols:['id','name','email','department','semester']},
+ courses:{label:'Courses',fields:[['code','Course Code'],['title','Title'],['credit_hours','Credit Hours','number'],['instructor','Instructor']],cols:['id','code','title','credit_hours','instructor']},
+ enrollments:{label:'Enrollments',fields:[['student_id','Student ID','number'],['course_id','Course ID','number'],['grade','Grade']],cols:['id','student_name','course_title','grade']}
+};
+let cur='students',editing=null;
+const $=id=>document.getElementById(id);
+function msg(t,ok=true){$('msg').className=ok?'ok':'err';$('msg').textContent=t;}
+async function api(url,method='GET',body){
+  const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const d=await r.json();if(!r.ok)throw new Error(d.error||'Error');return d;
+}
+function renderNav(){
+  $('nav').innerHTML='';
+  Object.keys(cfg).forEach(k=>{const b=document.createElement('button');b.textContent=cfg[k].label;
+    b.className=k===cur?'active':'';b.onclick=()=>{cur=k;editing=null;msg('');load();};$('nav').appendChild(b);});
+}
+function renderForm(){
+  const c=cfg[cur];
+  $('form').innerHTML=c.fields.map(f=>`<input id="f_${f[0]}" placeholder="${f[1]}" type="${f[2]||'text'}">`).join('')+
+   `<button class="btn" type="submit">${editing?'Update':'Add'}</button>`+(editing?'<button class="btn grey" type="button" id="cancel">Cancel</button>':'');
+  if(editing)$('cancel').onclick=()=>{editing=null;renderForm();};
+}
+$('form').onsubmit=async e=>{
+  e.preventDefault();const body={};
+  cfg[cur].fields.forEach(f=>body[f[0]]=$('f_'+f[0]).value);
+  try{
+    if(editing){await api(`/api/${cur}/${editing}`,'PUT',body);msg('Record updated');}
+    else{await api(`/api/${cur}`,'POST',body);msg('Record added');}
+    editing=null;load();
+  }catch(er){msg(er.message,false);}
+};
+async function load(){
+  renderNav();renderForm();
+  const c=cfg[cur];const rows=await api('/api/'+cur);
+  $('thead').innerHTML='<tr>'+c.cols.map(x=>`<th>${x.replace(/_/g,' ')}</th>`).join('')+'<th>Actions</th></tr>';
+  $('tbody').innerHTML='';
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=c.cols.map(x=>`<td>${r[x]??''}</td>`).join('')+'<td></td>';
+    const ed=document.createElement('button');ed.className='btn blue';ed.textContent='Edit';
+    ed.onclick=()=>{editing=r.id;renderForm();c.fields.forEach(f=>$('f_'+f[0]).value=r[f[0]]??'');window.scrollTo(0,0);};
+    const del=document.createElement('button');del.className='btn red';del.textContent='Delete';del.style.marginLeft='6px';
+    del.onclick=async()=>{if(!confirm('Delete this record?'))return;
+      try{await api(`/api/${cur}/${r.id}`,'DELETE');msg('Record deleted');load();}catch(er){msg(er.message,false);}};
+    tr.lastChild.append(ed,del);$('tbody').appendChild(tr);
+  });
+  const s=await api('/api/stats');
+  $('stats').innerHTML=`<div class="stat">Students: <b>${s.students}</b></div><div class="stat">Courses: <b>${s.courses}</b></div><div class="stat">Enrollments: <b>${s.enrollments}</b></div>`;
+}
+load().catch(e=>msg('Could not load data: '+e.message,false));
+</script></body></html>
