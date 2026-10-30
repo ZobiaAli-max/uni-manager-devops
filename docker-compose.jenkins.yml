@@ -1,0 +1,46 @@
+# PART II - used by the Jenkins pipeline (code is attached as a volume, no Dockerfile)
+services:
+  db2:
+    image: mysql:8.0
+    container_name: ci-db
+    restart: unless-stopped
+    command: --performance-schema=OFF --innodb-buffer-pool-size=128M
+    environment:
+      MYSQL_ROOT_PASSWORD: RootPass123
+      MYSQL_DATABASE: appdb
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: AppPass123
+    ports:
+      - "3308:3306"            # host 3308 -> container 3306
+    volumes:
+      - ci-dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pRootPass123 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web2:
+    image: node:20-alpine
+    container_name: ci-app
+    restart: unless-stopped
+    working_dir: /app
+    command: node server.js
+    depends_on:
+      db2:
+        condition: service_healthy
+    volumes:
+      - ./:/app                # code attached as a volume
+    environment:
+      DB_HOST: db2
+      DB_PORT: 3306
+      DB_USER: appuser
+      DB_PASSWORD: AppPass123
+      DB_NAME: appdb
+      PORT: 8080
+    ports:
+      - "8082:8080"            # host 8082 -> container 8080
+
+volumes:
+  ci-dbdata:

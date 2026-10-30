@@ -1,0 +1,43 @@
+# PART I - containerized deployment (image pulled from Docker Hub)
+services:
+  db:
+    image: mysql:8.0
+    container_name: uni-db
+    restart: always
+    command: --performance-schema=OFF --innodb-buffer-pool-size=128M
+    environment:
+      MYSQL_ROOT_PASSWORD: RootPass123
+      MYSQL_DATABASE: appdb
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: AppPass123
+    ports:
+      - "3307:3306"            # host 3307 -> container 3306
+    volumes:
+      - dbdata:/var/lib/mysql  # persistent database storage
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pRootPass123 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  app:
+    image: zobiaa11/uni-manager:latest
+    container_name: uni-app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: appuser
+      DB_PASSWORD: AppPass123
+      DB_NAME: appdb
+      PORT: 8080
+    ports:
+      - "8081:8080"            # host 8081 -> container 8080
+
+volumes:
+  dbdata:
